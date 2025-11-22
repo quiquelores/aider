@@ -75,13 +75,19 @@ def get_coder():
 async def startup_event():
     get_coder()
 
-def process_tool_output(item):
+def process_tool_output(item):    
+    if item.get("type") == "question":
+        return {
+            "type": "question", 
+            "content": item.get("content"),
+            "options": item.get("options")
+        }
+
     content = item.get("content", "")
     
     if not content or not content.strip():
         return None
-        
-    # High-level status mapping
+
     if "Applied edit to" in content:
         return {"type": "status", "content": "Edited files..."}
     elif "Repo-map:" in content:

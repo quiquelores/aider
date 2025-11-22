@@ -1011,6 +1011,17 @@ class InputOutput:
         style = RichStyle(**style)
         self.console.print(*messages, style=style)
 
+    def ask_question(self, question, options=None):
+        """
+        Display a question to the user.
+        """
+        import json
+        self.tool_output(json.dumps({
+            "type": "question",
+            "content": question,
+            "options": options
+        }, indent=4))
+
     def get_assistant_mdstream(self):
         mdargs = dict(
             style=self.assistant_output_color,

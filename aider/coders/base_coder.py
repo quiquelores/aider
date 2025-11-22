@@ -541,6 +541,30 @@ class Coder:
                 self.io.tool_output("JSON Schema:")
                 self.io.tool_output(json.dumps(self.functions, indent=4))
 
+        # Add the ask_question tool
+        self.functions = self.functions or []
+        self.functions.append(
+            {
+                "name": "ask_question",
+                "description": "Ask the user a question to gather information or confirmation.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                            "description": "The question to ask the user.",
+                        },
+                        "options": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of valid answer options (e.g., ['Yes', 'No']).",
+                        },
+                    },
+                    "required": ["question"],
+                },
+            }
+        )
+
     def setup_lint_cmds(self, lint_cmds):
         if not lint_cmds:
             return
@@ -1547,6 +1571,21 @@ class Coder:
             return
 
         if self.partial_response_function_call:
+            # Ensure we handle dict or object
+            if isinstance(self.partial_response_function_call, dict):
+                name = self.partial_response_function_call.get("name")
+            else:
+                name = getattr(self.partial_response_function_call, "name", None)
+
+            if name == "ask_question":
+                args = self.parse_partial_args()
+                if args:
+                    question = args.get("question")
+                    options = args.get("options")
+                    # Use the specialized method for asking questions
+                    self.io.ask_question(question, options)
+                    return  # Stop processing this turn, wait for user input
+
             args = self.parse_partial_args()
             if args:
                 content = args.get("explanation") or ""
@@ -1848,8 +1887,15 @@ class Coder:
         show_content_err = None
         try:
             if completion.choices[0].message.tool_calls:
+                tool_call = completion.choices[0].message.tool_calls[0]
+                
+                if tool_call.function.name == "ask_question":
+                    self.partial_response_function_call = tool_call.function
+                    # We don't need to continue parsing content if it's a tool call
+                    return
+
                 self.partial_response_function_call = (
-                    completion.choices[0].message.tool_calls[0].function
+                    tool_call.function
                 )
         except AttributeError as func_err:
             show_func_err = func_err
@@ -1919,6 +1965,24 @@ class Coder:
                     else:
                         self.partial_response_function_call[k] = v
                 received_content = True
+            except AttributeError:
+                pass
+
+            try:
+                tool_calls = chunk.choices[0].delta.tool_calls
+                if tool_calls:
+                    func = tool_calls[0].function
+                    if func:
+                        if hasattr(func, "name") and func.name:
+                            if "name" not in self.partial_response_function_call:
+                                self.partial_response_function_call["name"] = ""
+                            self.partial_response_function_call["name"] += func.name
+                        if hasattr(func, "arguments") and func.arguments:
+                            if "arguments" not in self.partial_response_function_call:
+                                self.partial_response_function_call["arguments"] = ""
+                            self.partial_response_function_call["arguments"] += func.arguments
+
+                    received_content = True
             except AttributeError:
                 pass
 

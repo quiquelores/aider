@@ -21,6 +21,17 @@ class ServerIO(InputOutput):
         self.output_queue.put({"type": "tool_warning", "content": msg})
         super().tool_warning(msg, strip=strip)
 
+    def ask_question(self, question, options=None):
+        self.output_queue.put({
+            "type": "question",
+            "content": question,
+            "options": options
+        })
+        # We don't want to call super().ask_question() because it calls tool_output()
+        # which would put a duplicate JSON-serialized message into the queue.
+        # The server logic handles the "type": "question" event separately.
+        pass
+
     def assistant_output(self, message, pretty=None):
         # We don't capture this here because we stream the LLM response directly
         # from the Coder generator in the API endpoint.
